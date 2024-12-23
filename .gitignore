@@ -2,9 +2,13 @@
 *pyc
 .vscode
 __pycache__
+*.py[cod]
+*$py.class
 *.egg-info
 
 checkpoints
 results
 backup
 LOG
+
+.wandb*

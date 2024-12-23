@@ -6,8 +6,11 @@ mainlogger = logging.getLogger('mainlogger')
 import torch
 from collections import OrderedDict
 
+import datetime 
+
 def init_workspace(name, logdir, model_config, lightning_config, rank=0):
-    workdir = os.path.join(logdir, name)
+    timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
+    workdir = os.path.join(logdir, name, timestamp)
     ckptdir = os.path.join(workdir, "checkpoints")
     cfgdir = os.path.join(workdir, "configs")
     loginfo = os.path.join(workdir, "loginfo")

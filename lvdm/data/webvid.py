@@ -121,7 +121,7 @@ class WebVid(Dataset):
 
             ## to avoid extreme cases when fixed_fps is used
             frame_stride = max(frame_stride, 1)
-            
+
             ## get valid range (adapting case by case)
             required_frame_num = frame_stride * (self.video_length-1) + 1
             frame_num = len(video_reader)
@@ -140,6 +140,7 @@ class WebVid(Dataset):
 
             ## calculate frame indices
             frame_indices = [start_idx + frame_stride*i for i in range(self.video_length)]
+
             try:
                 frames = video_reader.get_batch(frame_indices)
                 break

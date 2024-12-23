@@ -2,11 +2,15 @@ version=$1 ##1024, 512, 256
 seed=123
 name=dynamicrafter_$1_seed${seed}
 
-ckpt=checkpoints/dynamicrafter_$1_v1/model.ckpt
+ckpt="/<path_to_checkpoints>/epoch=XX-step=XXXX.ckpt"
 config=configs/inference_$1_v1.0.yaml
 
+echo "ckpt: $ckpt"
+
 prompt_dir=prompts/$1/
-res_dir="results"
+res_dir="/<path_to_results>"
+
+export HF_HOME="/<path_to_cache>"
 
 if [ "$1" == "256" ]; then
     H=256
@@ -22,14 +26,16 @@ else
     exit 1
 fi
 
+export CUDA_VISIBLE_DEVICES=0
+
 if [ "$1" == "256" ]; then
-CUDA_VISIBLE_DEVICES=0 python3 scripts/evaluation/inference.py \
+python3 scripts/evaluation/inference.py \
 --seed ${seed} \
 --ckpt_path $ckpt \
 --config $config \
 --savedir $res_dir/$name \
 --n_samples 1 \
---bs 1 --height ${H} --width $1 \
+--bs 2 --height ${H} --width $1 \
 --unconditional_guidance_scale 7.5 \
 --ddim_steps 50 \
 --ddim_eta 1.0 \
@@ -38,7 +44,7 @@ CUDA_VISIBLE_DEVICES=0 python3 scripts/evaluation/inference.py \
 --video_length 16 \
 --frame_stride ${FS}
 else
-CUDA_VISIBLE_DEVICES=0 python3 scripts/evaluation/inference.py \
+python3 scripts/evaluation/inference.py \
 --seed ${seed} \
 --ckpt_path $ckpt \
 --config $config \
@@ -54,8 +60,3 @@ CUDA_VISIBLE_DEVICES=0 python3 scripts/evaluation/inference.py \
 --frame_stride ${FS} \
 --timestep_spacing 'uniform_trailing' --guidance_rescale 0.7 --perframe_ae
 fi
-
-
-## multi-cond CFG: the <unconditional_guidance_scale> is s_txt, <cfg_img> is s_img
-#--multiple_cond_cfg --cfg_img 7.5
-#--loop

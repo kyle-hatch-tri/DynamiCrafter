@@ -1,10 +1,11 @@
 
+
 # args
 name="training_512_v1.0"
 config_file=configs/${name}/config_interp.yaml
 
 # save root dir for logs, checkpoints, tensorboard record, etc.
-save_root="/<path_to_results>/training"
+save_root="<path_do_results>/training"
 
 mkdir -p $save_root/${name}_interp
 

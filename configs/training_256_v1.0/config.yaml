@@ -1,33 +1,33 @@
 model:
-  pretrained_checkpoint: /<path_to_checkpoints>/dynamicrafter_512_v1/model.ckpt
+  pretrained_checkpoint: /<path_to_checkpoints>/dynamicrafter_256_v1/model.ckpt
   base_learning_rate: 1.0e-05
   scale_lr: False
   target: lvdm.models.ddpm3d.LatentVisualDiffusion
   params:
-    rescale_betas_zero_snr: True
-    parameterization: "v"
+    rescale_betas_zero_snr: True ###
+    parameterization: "v" ###
     linear_start: 0.00085
     linear_end: 0.012
     num_timesteps_cond: 1
-    log_every_t: 200
+    log_every_t: 200 ###
     timesteps: 1000
     first_stage_key: video
     cond_stage_key: caption
     cond_stage_trainable: False
-    image_proj_model_trainable: True
+    image_proj_model_trainable: True ### 
     conditioning_key: hybrid
-    image_size: [40, 64]
+    image_size: [32, 32]
     channels: 4
     scale_by_std: False
     scale_factor: 0.18215
     use_ema: False
-    uncond_prob: 0.05
+    uncond_prob: 0.05 ###
     uncond_type: 'empty_seq'
-    rand_cond_frame: true
-    use_dynamic_rescale: true
-    base_scale: 0.7
-    fps_condition_type: 'fps'
-    perframe_ae: True
+    rand_cond_frame: true ###
+    # use_dynamic_rescale: true ###
+    base_scale: 0.7 ### # this might not be used if use_dynamic_rescale=False?
+    fps_condition_type: 'fps' ###
+    perframe_ae: True ###
 
     unet_config:
       target: lvdm.modules.networks.openaimodel3d.UNetModel
@@ -59,7 +59,8 @@ model:
         temporal_length: 16
         addition_attention: true
         image_cross_attention: true
-        default_fs: 10
+        image_cross_attention_scale_learnable: true
+        default_fs: 3
         fs_condition: true
 
     first_stage_config:
@@ -121,11 +122,14 @@ data:
         data_dir: "/<path_to_data>/calvin_webvid_format"
         meta_path: "/<path_to_data>/calvin_webvid_format/metadata.csv"
         video_length: 16
-        frame_stride: 6
+        # frame_stride: 6
+        frame_stride: 1
         load_raw_resolution: true
-        resolution: [320, 512]
+        resolution: [256, 256]
         spatial_transform: resize_center_crop
-        random_fs: true  ## if true, we uniformly sample fs with max_fs=frame_stride (above)
+        # random_fs: true  ## if true, we uniformly sample fs with max_fs=frame_stride (above)
+        random_fs: false
+
 
 lightning:
   precision: 16
@@ -133,7 +137,7 @@ lightning:
   trainer:
     benchmark: True
     accumulate_grad_batches: 2
-    max_steps: 100000 
+    max_steps: 50000 # 100000
     # logger
     log_every_n_steps: 50
     # val

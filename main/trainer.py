@@ -11,6 +11,9 @@ from utils_train import get_trainer_callbacks, get_trainer_logger, get_trainer_s
 from utils_train import set_logger, init_workspace, load_checkpoints
 
 
+
+torch.set_float32_matmul_precision('medium') 
+
 def get_parser(**parser_kwargs):
     parser = argparse.ArgumentParser(**parser_kwargs)
     parser.add_argument("--seed", "-s", type=int, default=20230211, help="seed for seed_everything")
@@ -19,14 +22,15 @@ def get_parser(**parser_kwargs):
     parser.add_argument("--base", "-b", nargs="*", metavar="base_config.yaml", help="paths to base configs. Loaded from left-to-right. "
                             "Parameters can be overwritten or added with command-line options of the form `--key value`.", default=list())
     
-    parser.add_argument("--train", "-t", action='store_true', default=False, help='train')
-    parser.add_argument("--val", "-v", action='store_true', default=False, help='val')
-    parser.add_argument("--test", action='store_true', default=False, help='test')
+    parser.add_argument("--train", "-t", type=int, default=0, help='train')
+    parser.add_argument("--val", "-v", type=int, default=0, help='val')
+    parser.add_argument("--test", type=int, default=0, help='test')
 
     parser.add_argument("--logdir", "-l", type=str, default="logs", help="directory for logging dat shit")
-    parser.add_argument("--auto_resume", action='store_true', default=False, help="resume from full-info checkpoint")
-    parser.add_argument("--auto_resume_weight_only", action='store_true', default=False, help="resume from weight-only checkpoint")
-    parser.add_argument("--debug", "-d", action='store_true', default=False, help="enable post-mortem debugging")
+    
+    parser.add_argument("--auto_resume", type=int, default=0, help="resume from full-info checkpoint")
+    parser.add_argument("--auto_resume_weight_only", type=int, default=0, help="resume from weight-only checkpoint")
+    parser.add_argument("--debug", "-d", type=int, default=0, help="enable post-mortem debugging")
 
     return parser
     
@@ -36,6 +40,33 @@ def get_nondefault_trainer_args(args):
     default_trainer_args = parser.parse_args([])
     return sorted(k for k in vars(default_trainer_args) if getattr(args, k) != getattr(default_trainer_args, k))
 
+from collections import OrderedDict
+def load_model_checkpoint(model, ckpt):
+    state_dict = torch.load(ckpt, map_location="cpu")
+    if "state_dict" in list(state_dict.keys()):
+        state_dict = state_dict["state_dict"]
+        try:
+            model.load_state_dict(state_dict, strict=True)
+        except:
+            ## rename the keys for 256x256 model
+            new_pl_sd = OrderedDict()
+            for k,v in state_dict.items():
+                new_pl_sd[k] = v
+
+            for k in list(new_pl_sd.keys()):
+                if "framestride_embed" in k:
+                    new_key = k.replace("framestride_embed", "fps_embedding")
+                    new_pl_sd[new_key] = new_pl_sd[k]
+                    del new_pl_sd[k]
+            model.load_state_dict(new_pl_sd, strict=True)
+    else:
+        # deepspeed
+        new_pl_sd = OrderedDict()
+        for key in state_dict['module'].keys():
+            new_pl_sd[key[16:]]=state_dict['module'][key]
+        model.load_state_dict(new_pl_sd)
+    print('>>> model checkpoint loaded.')
+    return model
 
 if __name__ == "__main__":
     now = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
@@ -51,12 +82,21 @@ if __name__ == "__main__":
     transf_logging.set_verbosity_error()
     seed_everything(args.seed)
 
+    print("args:", args)
+
     ## yaml configs: "model" | "data" | "lightning"
     configs = [OmegaConf.load(cfg) for cfg in args.base]
     cli = OmegaConf.from_dotlist(unknown)
     config = OmegaConf.merge(*configs, cli)
     lightning_config = config.pop("lightning", OmegaConf.create())
-    trainer_config = lightning_config.get("trainer", OmegaConf.create()) 
+    trainer_config = lightning_config.get("trainer", OmegaConf.create())
+
+    if args.debug:
+        print("\n\n\n" + "=" * 30 + " In debug mode " + "=" * 30 + "\n\n\n")
+
+        args.logdir = os.path.join(args.logdir, "trash_results")
+        lightning_config.trainer.max_steps = 10
+        lightning_config.callbacks.model_checkpoint.params.every_n_train_steps = 9
 
     ## setup workspace directories
     workdir, ckptdir, cfgdir, loginfo = init_workspace(args.name, args.logdir, config, lightning_config, global_rank)
@@ -68,8 +108,17 @@ if __name__ == "__main__":
     config.model.params.logdir = workdir
     model = instantiate_from_config(config.model)
 
+
     ## load checkpoints
-    model = load_checkpoints(model, config.model)
+    print(f"Loading model from \"{config.model.pretrained_checkpoint}\"...")
+    if "256" in args.base[0]:
+        print("\tload_model_checkpoint")
+        model = load_model_checkpoint(model, config.model.pretrained_checkpoint)
+    else:
+        print("\tload_checkpoints")
+        model = load_checkpoints(model, config.model)
+    print(f"Done loading model.")
+
 
     ## register_schedule again to make ZTSNR work
     if model.rescale_betas_zero_snr:
@@ -109,7 +158,8 @@ if __name__ == "__main__":
     ## setup trainer args: pl-logger and callbacks
     trainer_kwargs = dict()
     trainer_kwargs["num_sanity_val_steps"] = 0
-    logger_cfg = get_trainer_logger(lightning_config, workdir, args.debug)
+    
+    logger_cfg = get_trainer_logger(lightning_config, workdir, args.debug) # args.debug doesn't actually do anything here it seems, unused (see main/utils_train.py)
     trainer_kwargs["logger"] = instantiate_from_config(logger_cfg)
     
     ## setup callbacks
@@ -161,8 +211,3 @@ if __name__ == "__main__":
         except Exception:
             #melk()
             raise
-
-    # if args.val:
-    #     trainer.validate(model, data)
-    # if args.test or not trainer.interrupted:
-    #     trainer.test(model, data)

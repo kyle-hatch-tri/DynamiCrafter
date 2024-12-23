@@ -15,6 +15,7 @@ from lvdm.models.samplers.ddim import DDIMSampler
 from lvdm.models.samplers.ddim_multiplecond import DDIMSampler as DDIMSampler_multicond
 from utils.utils import instantiate_from_config
 import random
+import cv2
 
 
 def get_filelist(data_dir, postfixes):
@@ -96,7 +97,8 @@ def load_data_prompts(data_dir, video_size=(256,256), video_frames=16, interp=Fa
             frame_tensor = torch.cat([frame_tensor1, frame_tensor2], dim=1)
             _, filename = os.path.split(file_list[idx*2])
         else:
-            image = Image.open(file_list[idx]).convert('RGB')
+            image = Image.open("calvin_rgb_obs.png").convert('RGB')
+            # image = image.resize((512, 512))
             image_tensor = transform(image).unsqueeze(1) # [c,1,h,w]
             frame_tensor = repeat(image_tensor, 'c t h w -> c (repeat t) h w', repeat=video_frames)
             _, filename = os.path.split(file_list[idx])
@@ -241,7 +243,6 @@ def image_guided_synthesis(model, prompts, videos, noise_shape, n_samples=1, ddi
                                             guidance_rescale=guidance_rescale,
                                             **kwargs
                                             )
-
         ## reconstruct from latent to pixel space
         batch_images = model.decode_first_stage(samples)
         batch_variants.append(batch_images)
@@ -266,7 +267,7 @@ def run_inference(args, gpu_num, gpu_no):
 
     ## run over data
     assert (args.height % 16 == 0) and (args.width % 16 == 0), "Error: image size [h,w] should be multiples of 16!"
-    assert args.bs == 1, "Current implementation only support [batch size = 1]!"
+    # assert args.bs == 1, "Current implementation only support [batch size = 1]!"
     ## latent noise shape
     h, w = args.height // 8, args.width // 8
     channels = model.model.diffusion_model.out_channels
@@ -274,8 +275,10 @@ def run_inference(args, gpu_num, gpu_no):
     print(f'Inference with {n_frames} frames')
     noise_shape = [args.bs, channels, n_frames, h, w]
 
-    fakedir = os.path.join(args.savedir, "samples")
-    fakedir_separate = os.path.join(args.savedir, "samples_separate")
+    timestamp = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
+
+    fakedir = os.path.join(args.savedir, "samples", timestamp)
+    fakedir_separate = os.path.join(args.savedir, "samples_separate", timestamp)
 
     # os.makedirs(fakedir, exist_ok=True)
     os.makedirs(fakedir_separate, exist_ok=True)
@@ -294,8 +297,9 @@ def run_inference(args, gpu_num, gpu_no):
 
     start = time.time()
     with torch.no_grad(), torch.cuda.amp.autocast():
-        for idx, indice in tqdm(enumerate(range(0, len(prompt_list_rank), args.bs)), desc='Sample Batch'):
-            prompts = prompt_list_rank[indice:indice+args.bs]
+        # for idx, indice in tqdm(enumerate(range(0, len(prompt_list_rank), args.bs)), desc='Sample Batch'):
+        for idx, indice in tqdm(enumerate(range(0, len(prompt_list_rank), 1)), desc='Sample Batch'):
+            prompts = ["go push the blue block left"] * args.bs
             videos = data_list_rank[indice:indice+args.bs]
             filenames = filename_list_rank[indice:indice+args.bs]
             if isinstance(videos, list):
@@ -306,15 +310,19 @@ def run_inference(args, gpu_num, gpu_no):
             batch_samples = image_guided_synthesis(model, prompts, videos, noise_shape, args.n_samples, args.ddim_steps, args.ddim_eta, \
                                 args.unconditional_guidance_scale, args.cfg_img, args.frame_stride, args.text_input, args.multiple_cond_cfg, args.loop, args.interp, args.timestep_spacing, args.guidance_rescale)
 
+            
+
+            if batch_samples.shape[0] > 1:
+                batch_samples = torch.cat([batch_samples[i] for i in range(batch_samples.shape[0])], dim=-2).unsqueeze(0)
+
             ## save each example individually
             for nn, samples in enumerate(batch_samples):
                 ## samples : [n_samples,c,t,h,w]
                 prompt = prompts[nn]
                 filename = filenames[nn]
                 # save_results(prompt, samples, filename, fakedir, fps=8, loop=args.loop)
+                print(f"[{nn}] samples.shape:", samples.shape)
                 save_results_seperate(prompt, samples, filename, fakedir, fps=8, loop=args.loop)
-
-    print(f"Saved in {args.savedir}. Time used: {(time.time() - start):.2f} seconds")
 
 
 def get_parser():

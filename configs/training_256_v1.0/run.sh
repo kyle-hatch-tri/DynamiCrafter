@@ -4,15 +4,15 @@ DEBUG=$1
 echo "DEBUG: $DEBUG"
 
 # args
-name="training_512_v1.0"
+name="training_256_v1.0"
 config_file=configs/${name}/config.yaml
 
 # save root dir for logs, checkpoints, tensorboard record, etc.
-save_root="/<path_to_results>/training"
+save_root="/<path_to_results>/training" 
 
 mkdir -p $save_root/$name
 
-export HF_HOME="/<path_to_cache>"
+export HF_HOME="/<path_to_cache>" 
 
 
 export HOST_GPU_NUM=8
@@ -25,7 +25,7 @@ if [ "$DEBUG" -eq 1 ]; then
     --nproc_per_node=1 --nnodes=1 --master_addr=127.0.0.1 --master_port=12352 --node_rank=0 \
     ./main/trainer.py \
     --base $config_file \
-    --train \
+    --train 1 \
     --name $name \
     --logdir $save_root \
     --devices 1 \
@@ -37,10 +37,11 @@ else
     --nproc_per_node=$HOST_GPU_NUM --nnodes=1 --master_addr=127.0.0.1 --master_port=12352 --node_rank=0 \
     ./main/trainer.py \
     --base $config_file \
-    --train \
+    --train 1 \
     --name $name \
     --logdir $save_root \
     --devices $HOST_GPU_NUM \
     --debug $DEBUG \
     lightning.trainer.num_nodes=1
 fi
+

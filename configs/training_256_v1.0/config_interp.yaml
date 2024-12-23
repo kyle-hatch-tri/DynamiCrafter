@@ -1,5 +1,5 @@
 model:
-  pretrained_checkpoint: /<path_to_checkpoints>/dynamicrafter_512_v1/model.ckpt
+  pretrained_checkpoint: checkpoints/dynamicrafter_512_interp_v1/model.ckpt
   base_learning_rate: 1.0e-05
   scale_lr: False
   target: lvdm.models.ddpm3d.LatentVisualDiffusion
@@ -23,11 +23,12 @@ model:
     use_ema: False
     uncond_prob: 0.05
     uncond_type: 'empty_seq'
-    rand_cond_frame: true
+    rand_cond_frame: false
     use_dynamic_rescale: true
     base_scale: 0.7
     fps_condition_type: 'fps'
-    perframe_ae: True
+    perframe_ae: true
+    interp_mode: true
 
     unet_config:
       target: lvdm.modules.networks.openaimodel3d.UNetModel
@@ -118,8 +119,8 @@ data:
     train:
       target: lvdm.data.webvid.WebVid
       params:
-        data_dir: "/<path_to_data>/calvin_webvid_format"
-        meta_path: "/<path_to_data>/calvin_webvid_format/metadata.csv"
+        data_dir: <WebVid10M DATA>
+        meta_path: <.csv FILE>
         video_length: 16
         frame_stride: 6
         load_raw_resolution: true
@@ -133,14 +134,13 @@ lightning:
   trainer:
     benchmark: True
     accumulate_grad_batches: 2
-    max_steps: 100000 
+    max_steps: 100000
     # logger
     log_every_n_steps: 50
     # val
     val_check_interval: 0.5
     gradient_clip_algorithm: 'norm'
     gradient_clip_val: 0.5
-    num_nodes: 1
   callbacks:
     model_checkpoint:
       target: pytorch_lightning.callbacks.ModelCheckpoint
